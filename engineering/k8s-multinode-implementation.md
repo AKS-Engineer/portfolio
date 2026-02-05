@@ -3,7 +3,7 @@
 ## Overview
 This document describes the engineering implementation of a multi‑node Kubernetes platform built using Vagrant, VMware Workstation, Ansible, kubeadm, and a supporting services layer (DNS, APT cache, private registry, HAProxy). The environment behaves like a small, self‑contained cloud designed for Kubernetes, Spark, Hadoop, Jenkins, Jupyter, and general distributed systems experimentation.
 
-The design emphasizes reproducibility, deterministic networking, version pinning, and local self‑sufficiency.
+All IP addresses and hostnames in this document use **example values** for illustration.
 
 ---
 
@@ -17,33 +17,33 @@ The design emphasizes reproducibility, deterministic networking, version pinning
 - Acts as an APT cache server for fast, repeatable provisioning  
 - Shared across Kubernetes, Spark, Hadoop, Jenkins, and other stacks  
 
-**k8s-config**  
+**config-node**  
 - Support node for Kubernetes and other platforms  
 - Hosts:  
-  - Private Docker/container registry (`k8s-config.mylab.io:5000`)  
+  - Private container registry (`registry.example.internal:5000`)  
   - HAProxy load balancer for Kubernetes ingress and service access  
   - TLS/CA material for internal trust  
   - IaC artifacts under `/vfiler`  
 - Provides image locality and stable ingress endpoints for local development  
 
-**k8s-master**  
+**cp-1**  
 - Kubernetes control plane node  
 - Runs kube-apiserver, scheduler, controller-manager, etcd  
 - Bootstrapped with kubeadm using custom CIDRs and internal registry  
 
-**k8s-node01, k8s-node02**  
-- Worker nodes  
+**worker-1, worker-2**  
+- Kubernetes worker nodes  
 - Run kubelet, kube-proxy, and user workloads  
 
 ### 1.2 Cluster Topology
 
-| Node        | IP Address       | Role            | CPU | RAM   |
-|-------------|------------------|------------------|-----|-------|
-| k8s-master  | 192.168.44.12    | Control Plane    | 2   | 16 GB |
-| k8s-node01  | 192.168.44.13    | Worker           | 2   | 16 GB |
-| k8s-node02  | 192.168.44.14    | Worker           | 2   | 16 GB |
-| k8s-config  | 192.168.44.11    | Registry + LB    | —   | —     |
-| dns-server  | 192.168.44.x     | DNS + APT Cache  | —   | —     |
+| Node        | Example IP     | Role            | CPU | RAM   |
+|-------------|----------------|------------------|-----|-------|
+| cp-1        | 10.10.0.10     | Control Plane    | 2   | 16 GB |
+| worker-1    | 10.10.0.11     | Worker           | 2   | 16 GB |
+| worker-2    | 10.10.0.12     | Worker           | 2   | 16 GB |
+| config-node | 10.10.0.20     | Registry + LB    | —   | —     |
+| dns-server  | 10.10.0.30     | DNS + APT Cache  | —   | —     |
 
 All nodes receive stable IPs and hostnames from `dns-server`.
 
@@ -55,7 +55,7 @@ All nodes receive stable IPs and hostnames from `dns-server`.
 The DNS server provides:
 
 - Forward and reverse DNS for all nodes  
-- Stable hostnames (`k8s-master.mylab.io`, etc.)  
+- Stable hostnames (`cp-1.example.internal`, etc.)  
 - Predictable IP allocation  
 
 This eliminates DHCP variability and ensures kubeadm, registry, and HAProxy configurations remain stable across rebuilds.
@@ -68,9 +68,9 @@ The DNS server also acts as an APT cache, enabling:
 - Reproducible builds even when upstream repos change  
 
 ### 2.3 Private Registry and HAProxy
-`k8s-config` hosts:
+`config-node` hosts:
 
-- A private registry (`k8s-config.mylab.io:5000`) used by kubeadm and workloads  
+- A private registry (`registry.example.internal:5000`) used by kubeadm and workloads  
 - HAProxy to expose Kubernetes services without relying on `kubectl proxy`  
 - CA certificates for internal TLS trust  
 
@@ -87,18 +87,18 @@ The Vagrantfile:
 - Defines static MACs and IPs for all nodes  
 - Mounts `/vfiler` from the host for IaC artifacts  
 - Runs base OS updates  
-- On `k8s-master`, installs Ansible and triggers the cluster playbook  
+- On `cp-1`, installs Ansible and triggers the cluster playbook  
 
 Vagrant handles **VM lifecycle only**.  
 All Kubernetes logic is delegated to Ansible.
 
 ### 3.2 Ansible Layer
-The Ansible playbook (`k8s-cluster-bun-2004.yaml`) executes in four stages:
+The Ansible playbook executes in four stages:
 
 1. **Container runtime + Kubernetes prep** on all Kubernetes nodes  
-2. **Control plane initialization** on `k8s-master`  
-3. **Worker node join** on `k8s-node01` and `k8s-node02`  
-4. **CNI and optional add‑ons** on `k8s-master`  
+2. **Control plane initialization** on `cp-1`  
+3. **Worker node join** on `worker-1` and `worker-2`  
+4. **CNI and optional add‑ons** on `cp-1`  
 
 ---
 
@@ -118,8 +118,6 @@ net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 ```
 
-These settings ensure proper packet forwarding and iptables visibility.
-
 ### 4.2 containerd Installation and Configuration
 Install containerd with pinned version:
 
@@ -127,7 +125,7 @@ Install containerd with pinned version:
 containerd.io={{ containerd_version }}
 ```
 
-Then lock it:
+Lock it:
 
 ```
 apt-mark hold containerd.io
@@ -139,18 +137,12 @@ Copy custom config:
 /vfiler/containerd/config.toml → /etc/containerd/
 ```
 
-This typically includes:
-
-- cgroup driver configuration  
-- registry mirrors (including the internal registry)  
-- runtime settings  
-
-Restart containerd after configuration.
+Restart containerd.
 
 ### 4.3 CA Distribution
 To trust the internal registry:
 
-- Copy `ca.mylab.io.crt` to `/usr/local/share/ca-certificates`  
+- Copy `ca.example.internal.crt` to `/usr/local/share/ca-certificates`  
 - Run `update-ca-certificates`  
 
 ### 4.4 Swap Disable
@@ -167,7 +159,7 @@ Install pinned versions of:
 - kubectl  
 - kubernetes-cni  
 
-Then lock them:
+Lock them:
 
 ```
 apt-mark hold kubectl kubeadm kubelet kubernetes-cni
@@ -179,26 +171,18 @@ Restart kubelet.
 
 ## 5. Control Plane Initialization
 
-`k8s-master` runs:
+`cp-1` runs:
 
 ```
 kubeadm init \
-  --apiserver-advertise-address={{ ansible_host_public_ip }} \
-  --apiserver-cert-extra-sans={{ ansible_host }} \
-  --node-name k8s-master \
+  --apiserver-advertise-address=10.10.0.10 \
+  --apiserver-cert-extra-sans=cp-1.example.internal \
+  --node-name cp-1 \
   --pod-network-cidr=10.244.0.0/16 \
   --service-cidr=10.244.5.0/24 \
-  --image-repository k8s-config.mylab.io:5000 \
+  --image-repository registry.example.internal:5000 \
   --kubernetes-version {{ k8s_version }}
 ```
-
-Key design choices:
-
-- Stable advertise address  
-- SANs for TLS correctness  
-- Custom Pod and Service CIDRs  
-- Internal registry for image pulls  
-- Version‑pinned Kubernetes  
 
 ### 5.1 kubeconfig Distribution
 Copy admin.conf to:
@@ -226,7 +210,7 @@ Store it in Ansible fact `join_command`.
 Workers execute:
 
 ```
-{{ hostvars['k8s-master'].join_command }} >> node_joined.txt
+{{ hostvars['cp-1'].join_command }} >> node_joined.txt
 ```
 
 This:
@@ -253,13 +237,6 @@ Commented sections include:
 - Istio (with Bookinfo demo)  
 - Ingress routing  
 - Add‑ons  
-
-When enabled, these turn the cluster into a full platform with:
-
-- Observability  
-- Web UI  
-- Service mesh  
-- Ingress routing  
 
 ---
 
@@ -298,13 +275,6 @@ You effectively have a **local cloud** capable of hosting:
 - Jupyter  
 - Web apps  
 - Any containerized workload  
-
-All with:
-
-- Stable endpoints  
-- Local image caching  
-- Fast rebuilds  
-- Predictable behavior  
 
 ---
 
