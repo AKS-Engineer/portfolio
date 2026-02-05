@@ -158,5 +158,6 @@ Focused on outcomes, not implementation details.
 ---
 
 ## Summary
-This work demonstrates my approach to platform product management: identify friction, define the right abstraction, and deliver reliability as a user‑facing feature. The result is a predictable CI/CD experience built on a clean separation between ephemeral compute and persistent state.
+Separating ephemeral compute from persistent state created a simple, reliable model for running Jenkins in an environment where VMs are frequently rebuilt. The result is a predictable CI/CD experience, reduced operational friction, and a reusable pattern for other stateful services. This work reflects a focus on reliability, clear abstraction boundaries, and developer‑centric platform design.
+
 
