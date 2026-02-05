@@ -229,16 +229,27 @@ Install Calico:
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.1/manifests/calico.yaml
 ```
 
-### 7.2 Optional Platform Layers
-Commented sections include:
+### 7.2 Optional Platform Abstractions
+
+The playbook includes abstractions for enabling additional platform capabilities beyond the core Kubernetes cluster. These components are intentionally modular and can be activated as needed to extend the environment into a full-featured platform.
+
+Available optional layers include:
 
 - Metrics Server  
 - Kubernetes Dashboard  
-- Istio (with Bookinfo demo)  
-- Ingress routing  
-- Add‑ons  
+- Istio service mesh (with Bookinfo demo)  
+- Ingress routing via HAProxy or Istio  
+- Additional observability and addon components  
 
----
+When enabled, these abstractions provide:
+
+- **Observability** (metrics, dashboards, service insights)  
+- **Web UI access** for cluster management  
+- **Service mesh capabilities** (mTLS, traffic shaping, routing)  
+- **Ingress routing** through stable, load-balanced endpoints  
+
+These layers are designed to be additive: the cluster functions fully without them, but they can be enabled to support richer platform scenarios.
+
 
 ## 8. Lifecycle, Reproducibility, and Platform Behavior
 
