@@ -158,14 +158,5 @@ Focused on outcomes, not implementation details.
 ---
 
 ## Summary
-This project shows how I think as a Platform Product Manager:
+This work demonstrates my approach to platform product management: identify friction, define the right abstraction, and deliver reliability as a user‑facing feature. The result is a predictable CI/CD experience built on a clean separation between ephemeral compute and persistent state.
 
-- identify user pain  
-- define abstraction boundaries  
-- design workflows that reduce friction  
-- create reliability guarantees  
-- translate engineering complexity into intuitive models  
-
-The engineering work is real.  
-The product thinking is intentional.  
-The narrative is credible for PM roles in AI infrastructure, compute platforms, and developer experience.
